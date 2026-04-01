@@ -21,7 +21,7 @@ class FakeSettings:
     def resolve_embedding_provider(
         self, requested_model: str | None
     ) -> tuple[str, str, FakeProvider]:
-        del requested_model
+        assert requested_model == "openai:text-embedding-3-small"
         return "openai", "text-embedding-3-small", FakeProvider()
 
 
@@ -44,7 +44,11 @@ async def test_embeddings_service_builds_openai_shape(monkeypatch: Any) -> None:
     monkeypatch.setattr(service, "_run_embeddings", fake_run_embeddings)
 
     response = await service.create(
-        EmbeddingsRequest(input=["alpha", "beta"], dimensions=8)
+        EmbeddingsRequest(
+            model="openai:text-embedding-3-small",
+            input=["alpha", "beta"],
+            dimensions=8,
+        )
     )
 
     assert response.object == "list"
@@ -72,7 +76,9 @@ async def test_embeddings_service_wraps_provider_errors(monkeypatch: Any) -> Non
     monkeypatch.setattr(service, "_run_embeddings", failing_run_embeddings)
 
     with pytest.raises(RuntimeError, match="Provider embeddings failed"):
-        await service.create(EmbeddingsRequest(input="hello"))
+        await service.create(
+            EmbeddingsRequest(model="openai:text-embedding-3-small", input="hello")
+        )
 
 
 @pytest.mark.asyncio
@@ -95,7 +101,13 @@ async def test_embedding_dimensions_override_provider_defaults(
 
     monkeypatch.setattr(service, "_run_embeddings", fake_run_embeddings)
 
-    await service.create(EmbeddingsRequest(input="alpha", dimensions=8))
+    await service.create(
+        EmbeddingsRequest(
+            model="openai:text-embedding-3-small",
+            input="alpha",
+            dimensions=8,
+        )
+    )
 
 
 @pytest.mark.asyncio
@@ -106,7 +118,7 @@ async def test_embeddings_service_requires_embedding_model() -> None:
         ) -> tuple[str, str, Any]:
             del requested_model
             raise ValueError(
-                "Request model is required when provider embedding_models use wildcard patterns"
+                "Request model is required and must use provider:model format"
             )
 
     service = EmbeddingsService(settings=cast(Any, MissingModelSettings()))

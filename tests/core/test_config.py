@@ -63,11 +63,11 @@ def test_settings_resolve_provider_matches_exact_and_wildcard() -> None:
         server=ServerSettings(),
     )
 
-    provider_id, model_name, _ = settings.resolve_chat_provider("haiku-3-5")
+    provider_id, model_name, _ = settings.resolve_chat_provider("bedrock:haiku-3-5")
     assert provider_id == "bedrock"
     assert model_name == "haiku-3-5"
 
-    provider_id, model_name, _ = settings.resolve_chat_provider("gpt-4o-mini")
+    provider_id, model_name, _ = settings.resolve_chat_provider("openai:gpt-4o-mini")
     assert provider_id == "openai"
     assert model_name == "gpt-4o-mini"
 
@@ -82,7 +82,7 @@ def test_settings_resolve_embedding_provider_matches_patterns() -> None:
     )
 
     provider_id, model_name, _ = settings.resolve_embedding_provider(
-        "amazon.titan-embed-text-v2:0"
+        "bedrock:amazon.titan-embed-text-v2:0"
     )
     assert provider_id == "bedrock"
     assert model_name == "amazon.titan-embed-text-v2:0"
@@ -95,18 +95,18 @@ def test_settings_resolve_provider_not_found() -> None:
     )
 
     with pytest.raises(ValueError):
-        settings.resolve_chat_provider("anthropic")
+        settings.resolve_chat_provider("openai:anthropic")
 
 
 def test_settings_requires_provider_entries(tmp_path: Path) -> None:
-    with mock.patch.dict(os.environ, {"LLM_SHIM_DATA_DIR": str(tmp_path)}):
-        with pytest.raises(ValidationError):
-            Settings(providers={}, server=ServerSettings())
+    with (
+        mock.patch.dict(os.environ, {"LLM_SHIM_DATA_DIR": str(tmp_path)}),
+        pytest.raises(ValidationError),
+    ):
+        Settings(providers={}, server=ServerSettings())
 
 
-def test_settings_resolve_provider_defaults_to_first_exact_pattern_when_model_missing() -> (
-    None
-):
+def test_settings_requires_provider_prefixed_model_when_missing() -> None:
     settings = Settings.model_construct(
         providers={
             "openai": ProviderSettings(
@@ -118,45 +118,56 @@ def test_settings_resolve_provider_defaults_to_first_exact_pattern_when_model_mi
         server=ServerSettings(),
     )
 
-    provider_id, model_name, _ = settings.resolve_chat_provider(None)
-    assert provider_id == "openai"
-    assert model_name == "gpt-4o-mini"
+    with pytest.raises(ValueError, match="provider:model"):
+        settings.resolve_chat_provider(None)
 
 
-def test_settings_requires_model_if_only_wildcard_patterns_exist() -> None:
+def test_settings_requires_provider_prefixed_model_format() -> None:
     settings = Settings.model_construct(
         providers={"openai": ProviderSettings(chat_models=["*"])},
         server=ServerSettings(),
     )
 
-    with pytest.raises(ValueError, match="Request model is required"):
-        settings.resolve_chat_provider(None)
+    with pytest.raises(ValueError, match="provider:model"):
+        settings.resolve_chat_provider("gpt-4o-mini")
+
+
+def test_settings_requires_provider_to_be_configured() -> None:
+    settings = Settings.model_construct(
+        providers={"openai": ProviderSettings(chat_models=["gpt-4o-mini"])},
+        server=ServerSettings(),
+    )
+
+    with pytest.raises(ValueError, match="provider 'bedrock'"):
+        settings.resolve_chat_provider("bedrock:gpt-4o-mini")
 
 
 def test_settings_requires_providers_key(tmp_path: Path) -> None:
-    with mock.patch.dict(os.environ, {"LLM_SHIM_DATA_DIR": str(tmp_path)}):
-        with pytest.raises(ValidationError, match="must define providers"):
-            Settings(
-                **{
-                    "openai": {
-                        "chat_models": ["gpt-*"],
-                        "env": {"OPENAI_API_KEY": "sk-test"},
-                    },
-                    "server": {"port": 9000},
-                }
-            )
+    with (
+        mock.patch.dict(os.environ, {"LLM_SHIM_DATA_DIR": str(tmp_path)}),
+        pytest.raises(ValidationError, match="must define providers"),
+    ):
+        Settings.model_validate(
+            {
+                "openai": {
+                    "chat_models": ["gpt-*"],
+                    "env": {"OPENAI_API_KEY": "sk-test"},
+                },
+                "server": {"port": 9000},
+            }
+        )
 
 
 def test_settings_accepts_nested_providers_key() -> None:
     validated = Settings(
         providers={
-            "openai": {
-                "chat_models": ["gpt-*"],
-                "embedding_models": ["text-embedding-3-*"],
-                "env": {"OPENAI_API_KEY": "sk-test"},
-            }
+            "openai": ProviderSettings(
+                chat_models=["gpt-*"],
+                embedding_models=["text-embedding-3-*"],
+                env={"OPENAI_API_KEY": "sk-test"},
+            )
         },
-        server={"port": 9000},
+        server=ServerSettings(port=9000),
     )
 
     assert "openai" in validated.providers
@@ -166,8 +177,8 @@ def test_settings_accepts_nested_providers_key() -> None:
 
 def test_settings_rejects_legacy_schema() -> None:
     with pytest.raises(ValidationError, match="no longer supported"):
-        Settings(
-            **{
+        Settings.model_validate(
+            {
                 "global_config": {"provider": "openai"},
                 "profiles": {"default": {"provider": "openai"}},
             }

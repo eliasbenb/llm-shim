@@ -28,7 +28,7 @@ class FakeSettings:
     def resolve_chat_provider(
         self, requested_model: str | None
     ) -> tuple[str, str, FakeProvider]:
-        del requested_model
+        assert requested_model == "openai:gpt-4o-mini"
         return "openai", "gpt-4o-mini", FakeProvider()
 
 
@@ -52,7 +52,10 @@ async def test_chat_service_returns_text_response(monkeypatch: Any) -> None:
     monkeypatch.setattr(service, "_run_text_model", fake_run_text)
 
     response = await service.create(
-        ChatCompletionRequest(messages=[ChatMessage(role="user", content="hello")])
+        ChatCompletionRequest(
+            model="openai:gpt-4o-mini",
+            messages=[ChatMessage(role="user", content="hello")],
+        )
     )
 
     assert response.object == "chat.completion"
@@ -86,6 +89,7 @@ async def test_chat_service_returns_json_schema_response(monkeypatch: Any) -> No
 
     response = await service.create(
         ChatCompletionRequest(
+            model="openai:gpt-4o-mini",
             messages=[ChatMessage(role="user", content="hello")],
             response_format=ResponseFormatJsonSchema(
                 type="json_schema",
@@ -124,7 +128,10 @@ async def test_chat_service_wraps_provider_errors(monkeypatch: Any) -> None:
 
     with pytest.raises(RuntimeError, match="Provider chat completion failed"):
         await service.create(
-            ChatCompletionRequest(messages=[ChatMessage(role="user", content="hello")])
+            ChatCompletionRequest(
+                model="openai:gpt-4o-mini",
+                messages=[ChatMessage(role="user", content="hello")],
+            )
         )
 
 
@@ -151,6 +158,7 @@ async def test_request_chat_model_settings_override_provider_defaults(
 
     await service.create(
         ChatCompletionRequest(
+            model="openai:gpt-4o-mini",
             messages=[ChatMessage(role="user", content="hello")],
             temperature=0.8,
             max_tokens=99,
@@ -166,7 +174,7 @@ async def test_chat_service_requires_chat_model() -> None:
         ) -> tuple[str, str, Any]:
             del requested_model
             raise ValueError(
-                "Request model is required when provider chat_models use wildcard patterns"
+                "Request model is required and must use provider:model format"
             )
 
     service = ChatService(settings=cast(Any, MissingModelSettings()))

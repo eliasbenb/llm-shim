@@ -80,29 +80,26 @@ class Settings(BaseSettings):
         """Resolve provider id and concrete model from mode-specific patterns."""
         field_name = "chat_models" if mode == "chat" else "embedding_models"
 
-        if requested_model is not None:
-            for provider_id, provider in self.providers.items():
-                patterns = getattr(provider, field_name)
-                if any(
-                    fnmatch.fnmatchcase(requested_model, pattern)
-                    for pattern in patterns
-                ):
-                    return provider_id, requested_model, provider
-
+        if requested_model is None:
             raise ValueError(
-                f"Requested model is not configured for {field_name}. "
-                f"Add a matching provider {field_name} pattern."
+                "Request model is required and must use provider:model format"
             )
 
-        for provider_id, provider in self.providers.items():
-            patterns = getattr(provider, field_name)
-            for pattern in patterns:
-                if not any(token in pattern for token in ("*", "?", "[")):
-                    return provider_id, pattern, provider
+        provider_id, sep, model_name = requested_model.partition(":")
+        if not sep or not provider_id or not model_name:
+            raise ValueError("Request model must use provider:model format")
+
+        provider = self.providers.get(provider_id)
+        if provider is None:
+            raise ValueError(f"Requested provider '{provider_id}' is not configured")
+
+        patterns = getattr(provider, field_name)
+        if any(fnmatch.fnmatchcase(model_name, pattern) for pattern in patterns):
+            return provider_id, model_name, provider
 
         raise ValueError(
-            f"Request model is required when provider {field_name} use wildcard "
-            "patterns"
+            f"Requested model '{model_name}' is not configured for provider "
+            f"'{provider_id}' in {field_name}"
         )
 
     def resolve_chat_provider(

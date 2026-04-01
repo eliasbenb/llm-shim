@@ -48,25 +48,25 @@ provider IDs. Each provider has separate chat and embeddings model patterns
 
 ```yaml
 providers:
-	openai:
-		chat_models: ["gpt-*"]
-		embedding_models: ["text-embedding-3-*"]
-		chat_model_settings: {}
-		embedding_model_settings: {}
-		env:
-			OPENAI_API_KEY: "sk-..."
+  openai:
+    chat_models: ["gpt-*"]
+    embedding_models: ["text-embedding-3-*"]
+    chat_model_settings: {}
+    embedding_model_settings: {}
+    env:
+      OPENAI_API_KEY: "sk-..."
 
-	bedrock:
-		chat_models: ["anthropic.claude*"]
-		embedding_models: ["amazon.titan-embed-text-*"]
-		env:
-			AWS_ACCESS_KEY_ID: "ak-..."
-			AWS_SECRET_ACCESS_KEY: "sk-..."
-			AWS_DEFAULT_REGION: "us-east-1"
+  bedrock:
+    chat_models: ["anthropic.claude*"]
+    embedding_models: ["amazon.titan-embed-text-*"]
+    env:
+      AWS_ACCESS_KEY_ID: "ak-..."
+      AWS_SECRET_ACCESS_KEY: "sk-..."
+      AWS_DEFAULT_REGION: "us-east-1"
 
 server:
-	host: "0.0.0.0"
-	port: 8000
+  host: "0.0.0.0"
+  port: 8000
 ```
 
 Routing behavior:
@@ -82,40 +82,40 @@ Routing behavior:
 
 ```bash
 curl -s http://localhost:8000/v1/chat/completions \
-	-H 'Content-Type: application/json' \
-	-d '{
-		"model": "gpt-4o-mini",
-		"messages": [
-			{"role": "user", "content": "Testing..."}
-		]
-	}'
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "openai:gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "Testing..."}
+    ]
+  }'
 ```
 
 ### Chat completion with JSON schema output
 
 ```bash
 curl -s http://localhost:8000/v1/chat/completions \
-	-H 'Content-Type: application/json' \
-	-d '{
-		"model": "gpt-4o-mini",
-		"messages": [
-			{"role": "user", "content": "Return a short summary and confidence."}
-		],
-		"response_format": {
-			"type": "json_schema",
-			"json_schema": {
-				"name": "summary_response",
-				"schema": {
-					"type": "object",
-					"properties": {
-						"summary": {"type": "string"},
-						"confidence": {"type": "number"}
-					},
-					"required": ["summary", "confidence"]
-				}
-			}
-		}
-	}'
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "openai:gpt-4o-mini",
+    "messages": [
+      {"role": "user", "content": "Return a short summary and confidence."}
+    ],
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "summary_response",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {"type": "string"},
+            "confidence": {"type": "number"}
+          },
+          "required": ["summary", "confidence"]
+        }
+      }
+    }
+  }'
 ```
 
 `content` is returned as a JSON string for schema-based responses.
@@ -124,9 +124,9 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 ```bash
 curl -s http://localhost:8000/v1/embeddings \
-	-H 'Content-Type: application/json' \
-	-d '{
-		"model": "text-embedding-3-small",
-		"input": "llm-shim"
-	}'
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "openai:text-embedding-3-small",
+    "input": "llm-shim"
+  }'
 ```

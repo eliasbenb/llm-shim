@@ -20,9 +20,21 @@ class ModelsService:
 
         data: list[ModelListItem] = []
         for provider_id, model in self._settings.list_chat_models():
-            data.append(ModelListItem(id=model, created=created, owned_by=provider_id))
+            data.append(
+                ModelListItem(
+                    id=f"{provider_id}:{model}",
+                    created=created,
+                    owned_by=provider_id,
+                )
+            )
         for provider_id, model in self._settings.list_embedding_models():
-            data.append(ModelListItem(id=model, created=created, owned_by=provider_id))
+            data.append(
+                ModelListItem(
+                    id=f"{provider_id}:{model}",
+                    created=created,
+                    owned_by=provider_id,
+                )
+            )
 
         return ModelListResponse(data=data)
 

@@ -33,7 +33,7 @@ async def test_models_endpoint_lists_chat_and_embedding_models(
             return ModelListResponse(
                 data=[
                     ModelListItem(
-                        id=model,
+                        id=f"{provider_id}:{model}",
                         created=123,
                         owned_by=provider_id,
                     )
@@ -55,11 +55,11 @@ async def test_models_endpoint_lists_chat_and_embedding_models(
     ids = [entry.id for entry in response.data]
     owners = [entry.owned_by for entry in response.data]
 
-    assert "gpt-4o-mini" in ids
-    assert "gpt-4.1*" in ids
-    assert "text-embedding-3-small" in ids
-    assert "haiku*" in ids
-    assert "amazon.titan-embed-text-*" in ids
+    assert "openai:gpt-4o-mini" in ids
+    assert "openai:gpt-4.1*" in ids
+    assert "openai:text-embedding-3-small" in ids
+    assert "bedrock:haiku*" in ids
+    assert "bedrock:amazon.titan-embed-text-*" in ids
 
     assert "openai" in owners
     assert "bedrock" in owners
