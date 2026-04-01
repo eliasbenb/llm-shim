@@ -2,6 +2,7 @@
 
 from typing import Any, Literal, cast
 
+from instructor.models import KnownModelName
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 
@@ -42,7 +43,7 @@ class ChatCompletionRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    model: str | None = None
+    model: KnownModelName | str | None = None
     messages: list[ChatMessage]
     temperature: float | None = None
     top_p: float | None = None
@@ -99,7 +100,7 @@ class ChatCompletionResponse(BaseModel):
     id: str
     object: Literal["chat.completion"] = "chat.completion"
     created: int
-    model: str
+    model: KnownModelName | str
     choices: list[ChatCompletionChoice]
     usage: ChatCompletionUsage
 
@@ -109,7 +110,7 @@ class EmbeddingsRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    model: str | None = None
+    model: KnownModelName | str | None = None
     input: str | list[str]
     encoding_format: Literal["float"] | None = None
     dimensions: int | None = None
@@ -150,7 +151,7 @@ class EmbeddingsResponse(BaseModel):
 
     object: Literal["list"] = "list"
     data: list[EmbeddingDatum]
-    model: str
+    model: KnownModelName | str
     usage: EmbeddingsUsage
 
 
