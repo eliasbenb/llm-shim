@@ -26,6 +26,14 @@ class InstructorSettings(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
     @property
+    def provider_name(self) -> str:
+        """Return the configured provider name."""
+        model = str(self.model)
+        if "/" in model:
+            return model.split("/", maxsplit=1)[0]
+        return model
+
+    @property
     def provider_model_name(self) -> str:
         """Return provider-native model name without provider prefix."""
         model = str(self.model)
