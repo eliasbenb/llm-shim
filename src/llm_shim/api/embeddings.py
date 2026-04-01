@@ -1,8 +1,6 @@
 """Embeddings API endpoint."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
 from llm_shim.api.models import EmbeddingsRequest, EmbeddingsResponse
 from llm_shim.services.embeddings import EmbeddingsService
@@ -13,9 +11,7 @@ router = APIRouter(tags=["embeddings"])
 
 
 @router.post("/v1/embeddings")
-async def create_embeddings(
-    request: EmbeddingsRequest, service: Annotated[EmbeddingsService, Depends()]
-) -> EmbeddingsResponse:
+async def create_embeddings(request: EmbeddingsRequest) -> EmbeddingsResponse:
     """Create OpenAI-compatible embeddings output for providers with embeddings APIs.
 
     Args:
@@ -25,6 +21,7 @@ async def create_embeddings(
     Returns:
         EmbeddingsResponse: OpenAI embeddings response.
     """
+    service = EmbeddingsService()
     try:
         return await service.create(request)
     except ValueError as error:

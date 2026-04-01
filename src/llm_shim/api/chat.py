@@ -1,8 +1,6 @@
 """Chat completion API endpoint."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
 from llm_shim.api.models import (
     ChatCompletionRequest,
@@ -18,7 +16,6 @@ router = APIRouter(tags=["chat"])
 @router.post("/v1/chat/completions")
 async def create_chat_completion(
     request: ChatCompletionRequest,
-    service: Annotated[ChatService, Depends()],
 ) -> ChatCompletionResponse:
     """Create an OpenAI-compatible chat completion response.
 
@@ -29,6 +26,7 @@ async def create_chat_completion(
     Returns:
         ChatCompletionResponse: OpenAI chat completion response.
     """
+    service = ChatService()
     try:
         return await service.create(request)
     except ValueError as error:

@@ -26,7 +26,7 @@ def get_data_dir() -> Path:
     Returns:
         Path: Path to the data directory where config.yaml should exist.
     """
-    data_dir = os.getenv("LLM_SHIM_DATA_DIR", "")
+    data_dir = os.getenv("LLM_SHIM_DATA_DIR", "data/")
     return Path(data_dir)
 
 
