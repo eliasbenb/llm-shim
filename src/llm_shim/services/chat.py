@@ -5,7 +5,6 @@ from functools import lru_cache
 from typing import Any, cast
 from uuid import uuid4
 
-from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.settings import ModelSettings
 
@@ -15,8 +14,6 @@ from llm_shim.api.schemas.openai import (
     ChatCompletionResponse,
     ChatCompletionResponseMessage,
     ChatCompletionUsage,
-    JsonSchemaModelFactory,
-    ResponseFormatJsonSchema,
 )
 from llm_shim.core.config import Settings, get_settings
 from llm_shim.core.utils import environment_override_lock, patched_environ
@@ -99,21 +96,6 @@ class ChatService:
         ).run(prompt)
         return str(result.output)
 
-    async def _run_structured_model(
-        self,
-        model_name: str,
-        prompt: str,
-        output_model: type[BaseModel],
-        model_settings: ModelSettings | None,
-    ) -> BaseModel:
-        """Execute structured generation with pydantic-ai."""
-        result = await Agent(
-            model_name,
-            output_type=output_model,
-            model_settings=model_settings,
-        ).run(prompt)
-        return cast(BaseModel, result.output)
-
     async def create(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         """Create a provider chat completion normalized to OpenAI response format.
 
@@ -133,31 +115,6 @@ class ChatService:
             provider_settings=provider.chat_model_settings,
             request_kwargs=create_kwargs,
         )
-
-        if isinstance(request.response_format, ResponseFormatJsonSchema):
-            try:
-                dynamic_model = JsonSchemaModelFactory.build_model(
-                    request.response_format.json_schema,
-                )
-                async with environment_override_lock:
-                    with patched_environ(provider.env):
-                        structured_response = await self._run_structured_model(
-                            model_name=configured_model,
-                            prompt=prompt,
-                            output_model=dynamic_model,
-                            model_settings=model_settings,
-                        )
-            except ValueError:
-                raise
-            except Exception as error:
-                raise RuntimeError(
-                    f"Provider chat completion failed: {error}"
-                ) from error
-
-            return self._build_response(
-                configured_model=configured_model,
-                content=structured_response.model_dump_json(),
-            )
 
         try:
             async with environment_override_lock:

@@ -1,13 +1,10 @@
 from typing import Any, cast
 
 import pytest
-from pydantic import BaseModel
 
 from llm_shim.api.schemas.openai import (
     ChatCompletionRequest,
     ChatMessage,
-    ResponseFormatJsonSchema,
-    ResponseFormatJsonSchemaDefinition,
 )
 from llm_shim.services.chat import ChatService
 
@@ -64,50 +61,6 @@ async def test_chat_service_returns_text_response(monkeypatch: Any) -> None:
     assert response.usage.prompt_tokens == 0
     assert response.usage.completion_tokens == 0
     assert response.usage.total_tokens == 0
-
-
-@pytest.mark.asyncio
-async def test_chat_service_returns_json_schema_response(monkeypatch: Any) -> None:
-    service = ChatService(settings=cast(Any, FakeSettings()))
-
-    class Structured(BaseModel):
-        answer: str
-
-    async def fake_run_structured(
-        model_name: str,
-        prompt: str,
-        output_model: type[BaseModel],
-        model_settings: dict[str, Any] | None,
-    ) -> BaseModel:
-        assert model_name == "openai:gpt-4o-mini"
-        assert "user: hello" in prompt
-        assert issubclass(output_model, BaseModel)
-        assert model_settings is not None
-        return Structured(answer="ok")
-
-    monkeypatch.setattr(service, "_run_structured_model", fake_run_structured)
-
-    response = await service.create(
-        ChatCompletionRequest(
-            model="openai:gpt-4o-mini",
-            messages=[ChatMessage(role="user", content="hello")],
-            response_format=ResponseFormatJsonSchema(
-                type="json_schema",
-                json_schema=ResponseFormatJsonSchemaDefinition(
-                    name="answer_schema",
-                    schema={
-                        "type": "object",
-                        "properties": {"answer": {"type": "string"}},
-                        "required": ["answer"],
-                    },
-                ),
-            ),
-        )
-    )
-
-    assert response.choices[0].message.content == '{"answer":"ok"}'
-    assert response.usage.prompt_tokens == 0
-    assert response.usage.completion_tokens == 0
 
 
 @pytest.mark.asyncio

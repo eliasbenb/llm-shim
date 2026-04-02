@@ -3,15 +3,12 @@
 from typing import Any, cast
 
 import pytest
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from llm_shim.api.schemas.openai import (
     ChatCompletionRequest,
     ChatMessage,
     EmbeddingsRequest,
-    JsonSchemaModelFactory,
-    ResponseFormatJsonSchema,
-    ResponseFormatJsonSchemaDefinition,
 )
 
 
@@ -146,164 +143,6 @@ def test_embeddings_request_all_fields() -> None:
     assert request.user == "user-1"
 
 
-def test_json_schema_model_factory_simple_object() -> None:
-    """JsonSchemaModelFactory should build model from simple object schema."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="TestModel",
-        schema={
-            "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "age": {"type": "integer"},
-            },
-            "required": ["name"],
-        },
-    )
-
-    model = JsonSchemaModelFactory.build_model(definition)
-
-    assert issubclass(model, BaseModel)
-    instance = model(name="Alice", age=30)
-    dumped = instance.model_dump()
-    assert dumped["name"] == "Alice"
-    assert dumped["age"] == 30
-
-
-def test_json_schema_model_factory_optional_fields() -> None:
-    """JsonSchemaModelFactory should handle optional fields."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="TestModel",
-        schema={
-            "type": "object",
-            "properties": {
-                "name": {"type": "string"},
-                "email": {"type": "string"},
-            },
-            "required": ["name"],
-        },
-    )
-
-    model = JsonSchemaModelFactory.build_model(definition)
-
-    instance = model(name="Alice")
-    dumped = instance.model_dump()
-    assert dumped["name"] == "Alice"
-    assert dumped["email"] is None
-
-
-def test_json_schema_model_factory_all_types() -> None:
-    """JsonSchemaModelFactory should handle all JSON schema types."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="AllTypes",
-        schema={
-            "type": "object",
-            "properties": {
-                "string_field": {"type": "string"},
-                "int_field": {"type": "integer"},
-                "float_field": {"type": "number"},
-                "bool_field": {"type": "boolean"},
-                "array_field": {"type": "array"},
-                "object_field": {"type": "object"},
-            },
-            "required": [
-                "string_field",
-                "int_field",
-                "float_field",
-                "bool_field",
-                "array_field",
-                "object_field",
-            ],
-        },
-    )
-
-    model = JsonSchemaModelFactory.build_model(definition)
-
-    instance = model(
-        string_field="text",
-        int_field=42,
-        float_field=3.14,
-        bool_field=True,
-        array_field=[1, 2, 3],
-        object_field={"key": "value"},
-    )
-
-    dumped = instance.model_dump()
-    assert dumped["string_field"] == "text"
-    assert dumped["int_field"] == 42
-    assert dumped["float_field"] == 3.14
-    assert dumped["bool_field"] is True
-    assert dumped["array_field"] == [1, 2, 3]
-    assert dumped["object_field"] == {"key": "value"}
-
-
-def test_json_schema_model_factory_invalid_root_type() -> None:
-    """JsonSchemaModelFactory should reject non-object root types."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="Invalid",
-        schema={"type": "string"},
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        JsonSchemaModelFactory.build_model(definition)
-
-    assert "root object" in str(exc_info.value).lower()
-
-
-def test_json_schema_model_factory_invalid_properties_not_dict() -> None:
-    """JsonSchemaModelFactory should validate properties is a dict."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="Invalid",
-        schema={
-            "type": "object",
-            "properties": ["not", "a", "dict"],
-        },
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        JsonSchemaModelFactory.build_model(definition)
-
-    assert "properties must be an object" in str(exc_info.value).lower()
-
-
-def test_json_schema_model_factory_invalid_property_schema_not_dict() -> None:
-    """JsonSchemaModelFactory should validate each property schema is a dict."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="Invalid",
-        schema={
-            "type": "object",
-            "properties": {
-                "field": "invalid",
-            },
-        },
-    )
-
-    with pytest.raises(ValueError) as exc_info:
-        JsonSchemaModelFactory.build_model(definition)
-
-    assert "property schema must be an object" in str(exc_info.value).lower()
-
-
-def test_response_format_json_schema_definition_with_alias() -> None:
-    """ResponseFormatJsonSchemaDefinition should map schema -> schema_."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="Test",
-        schema={"type": "object", "properties": {}},
-    )
-    assert definition.schema_ == {"type": "object", "properties": {}}
-
-
-def test_response_format_json_schema() -> None:
-    """ResponseFormatJsonSchema should validate type."""
-    fmt = ResponseFormatJsonSchema(
-        type="json_schema",
-        json_schema=ResponseFormatJsonSchemaDefinition(
-            name="Test",
-            schema={"type": "object", "properties": {}},
-        ),
-    )
-    assert fmt.type == "json_schema"
-
-
 def test_chat_completion_usage_defaults() -> None:
     """ChatCompletionUsage should have zero defaults."""
     from llm_shim.api.schemas.openai import ChatCompletionUsage
@@ -364,29 +203,3 @@ def test_embeddings_response() -> None:
     assert response.model == "embedding-model"
     assert len(response.data) == 2
     assert response.data[0].object == "embedding"
-
-
-def test_json_schema_model_factory_unknown_type() -> None:
-    """_annotation_from_schema should fallback to dict for unknown types."""
-    definition = ResponseFormatJsonSchemaDefinition(
-        name="UnknownTypes",
-        schema={
-            "type": "object",
-            "properties": {
-                "unknown": {"type": "null"},
-                "also_unknown": {"type": "enum"},
-            },
-            "required": ["unknown", "also_unknown"],
-        },
-    )
-
-    model = JsonSchemaModelFactory.build_model(definition)
-
-    # Unknown types should be treated as dict[str, Any]
-    instance = model(
-        unknown={"anything": "goes"},
-        also_unknown={"options": ["a", "b"]},
-    )
-    dumped = instance.model_dump()
-    assert dumped["unknown"] == {"anything": "goes"}
-    assert dumped["also_unknown"] == {"options": ["a", "b"]}
