@@ -1,11 +1,13 @@
 from typing import Any, cast
 
 import pytest
+from pydantic_ai.usage import RunUsage
 
 from llm_shim.api.schemas.openai import (
     ChatCompletionRequest,
     ChatMessage,
 )
+from llm_shim.core.exceptions import BadRequestError, ProviderCallError
 from llm_shim.services.chat import ChatService
 
 
@@ -37,14 +39,14 @@ async def test_chat_service_returns_text_response(monkeypatch: Any) -> None:
         model_name: str,
         prompt: str,
         model_settings: dict[str, Any] | None,
-    ) -> str:
+    ) -> tuple[str, RunUsage]:
         assert model_name == "openai:gpt-4o-mini"
         assert "user: hello" in prompt
         assert model_settings is not None
         assert model_settings["temperature"] == 0.1
         assert model_settings["max_tokens"] == 32
         assert model_settings["timeout"] == 30
-        return "plain completion"
+        return "plain completion", RunUsage(input_tokens=10, output_tokens=5)
 
     monkeypatch.setattr(service, "_run_text_model", fake_run_text)
 
@@ -58,9 +60,9 @@ async def test_chat_service_returns_text_response(monkeypatch: Any) -> None:
     assert response.object == "chat.completion"
     assert response.model == "openai:gpt-4o-mini"
     assert response.choices[0].message.content == "plain completion"
-    assert response.usage.prompt_tokens == 0
-    assert response.usage.completion_tokens == 0
-    assert response.usage.total_tokens == 0
+    assert response.usage.prompt_tokens == 10
+    assert response.usage.completion_tokens == 5
+    assert response.usage.total_tokens == 15
 
 
 @pytest.mark.asyncio
@@ -71,7 +73,7 @@ async def test_chat_service_wraps_provider_errors(monkeypatch: Any) -> None:
         model_name: str,
         prompt: str,
         model_settings: dict[str, Any] | None,
-    ) -> str:
+    ) -> tuple[str, RunUsage]:
         del model_name
         del prompt
         del model_settings
@@ -79,7 +81,7 @@ async def test_chat_service_wraps_provider_errors(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(service, "_run_text_model", failing_run_text)
 
-    with pytest.raises(RuntimeError, match="Provider chat completion failed"):
+    with pytest.raises(ProviderCallError, match="Provider chat completion failed"):
         await service.create(
             ChatCompletionRequest(
                 model="openai:gpt-4o-mini",
@@ -98,14 +100,14 @@ async def test_request_chat_model_settings_override_provider_defaults(
         model_name: str,
         prompt: str,
         model_settings: dict[str, Any] | None,
-    ) -> str:
+    ) -> tuple[str, RunUsage]:
         del model_name
         del prompt
         assert model_settings is not None
         assert model_settings["temperature"] == 0.8
         assert model_settings["max_tokens"] == 99
         assert model_settings["timeout"] == 30
-        return "ok"
+        return "ok", RunUsage()
 
     monkeypatch.setattr(service, "_run_text_model", fake_run_text)
 
@@ -126,13 +128,13 @@ async def test_chat_service_requires_chat_model() -> None:
             self, requested_model: str | None
         ) -> tuple[str, str, Any]:
             del requested_model
-            raise ValueError(
+            raise BadRequestError(
                 "Request model is required and must use provider:model format"
             )
 
     service = ChatService(settings=cast(Any, MissingModelSettings()))
 
-    with pytest.raises(ValueError, match="Request model is required"):
+    with pytest.raises(BadRequestError, match="Request model is required"):
         await service.create(
             ChatCompletionRequest(messages=[ChatMessage(role="user", content="hello")])
         )

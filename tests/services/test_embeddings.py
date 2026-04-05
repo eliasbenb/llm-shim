@@ -1,8 +1,10 @@
 from typing import Any, cast
 
 import pytest
+from pydantic_ai.usage import RequestUsage
 
 from llm_shim.api.schemas.openai import EmbeddingsRequest
+from llm_shim.core.exceptions import BadRequestError, ProviderCallError
 from llm_shim.services.embeddings import EmbeddingsService
 
 
@@ -33,13 +35,13 @@ async def test_embeddings_service_builds_openai_shape(monkeypatch: Any) -> None:
         model_name: str,
         inputs: list[str],
         model_settings: dict[str, Any] | None,
-    ) -> list[list[float]]:
+    ) -> tuple[list[list[float]], RequestUsage]:
         assert model_name == "openai:text-embedding-3-small"
         assert inputs == ["alpha", "beta"]
         assert model_settings is not None
         assert model_settings["dimensions"] == 8
         assert model_settings["truncate"] is True
-        return [[1.0, 2.0], [3.0, 4.0]]
+        return [[1.0, 2.0], [3.0, 4.0]], RequestUsage(input_tokens=12)
 
     monkeypatch.setattr(service, "_run_embeddings", fake_run_embeddings)
 
@@ -55,8 +57,8 @@ async def test_embeddings_service_builds_openai_shape(monkeypatch: Any) -> None:
     assert response.model == "openai:text-embedding-3-small"
     assert [item.index for item in response.data] == [0, 1]
     assert response.data[0].embedding == [1.0, 2.0]
-    assert response.usage.prompt_tokens == 0
-    assert response.usage.total_tokens == 0
+    assert response.usage.prompt_tokens == 12
+    assert response.usage.total_tokens == 12
 
 
 @pytest.mark.asyncio
@@ -67,7 +69,7 @@ async def test_embeddings_service_wraps_provider_errors(monkeypatch: Any) -> Non
         model_name: str,
         inputs: list[str],
         model_settings: dict[str, Any] | None,
-    ) -> list[list[float]]:
+    ) -> tuple[list[list[float]], RequestUsage]:
         del model_name
         del inputs
         del model_settings
@@ -75,7 +77,7 @@ async def test_embeddings_service_wraps_provider_errors(monkeypatch: Any) -> Non
 
     monkeypatch.setattr(service, "_run_embeddings", failing_run_embeddings)
 
-    with pytest.raises(RuntimeError, match="Provider embeddings failed"):
+    with pytest.raises(ProviderCallError, match="Provider embeddings failed"):
         await service.create(
             EmbeddingsRequest(model="openai:text-embedding-3-small", input="hello")
         )
@@ -91,13 +93,13 @@ async def test_embedding_dimensions_override_provider_defaults(
         model_name: str,
         inputs: list[str],
         model_settings: dict[str, Any] | None,
-    ) -> list[list[float]]:
+    ) -> tuple[list[list[float]], RequestUsage]:
         del model_name
         del inputs
         assert model_settings is not None
         assert model_settings["dimensions"] == 8
         assert model_settings["truncate"] is True
-        return [[1.0, 2.0]]
+        return [[1.0, 2.0]], RequestUsage()
 
     monkeypatch.setattr(service, "_run_embeddings", fake_run_embeddings)
 
@@ -117,11 +119,11 @@ async def test_embeddings_service_requires_embedding_model() -> None:
             self, requested_model: str | None
         ) -> tuple[str, str, Any]:
             del requested_model
-            raise ValueError(
+            raise BadRequestError(
                 "Request model is required and must use provider:model format"
             )
 
     service = EmbeddingsService(settings=cast(Any, MissingModelSettings()))
 
-    with pytest.raises(ValueError, match="Request model is required"):
+    with pytest.raises(BadRequestError, match="Request model is required"):
         await service.create(EmbeddingsRequest(input="hello"))

@@ -1,93 +1,59 @@
 """Tests for chat API endpoint error handling."""
 
-from typing import Any, cast
+from typing import cast
 
 import pytest
-from fastapi import HTTPException
 
-from llm_shim.api import chat
-from llm_shim.api.schemas.openai import ChatCompletionRequest, ChatMessage
+from llm_shim.api.chat import create_chat_completion
+from llm_shim.api.schemas.openai import (
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChatMessage,
+)
+from llm_shim.core.exceptions import BadRequestError, ProviderCallError
 from llm_shim.services.chat import ChatService
 
 
-class FakeFailingChatService:
-    """Service that raises ValueError."""
+class FakeFailingChatServiceBadRequest(ChatService):
+    """Service that raises BadRequestError."""
 
-    async def create(self, request: ChatCompletionRequest) -> None:
-        raise ValueError("Invalid prompt")
-
-
-class FakeFailingChatServiceRuntime:
-    """Service that raises RuntimeError with initialization prefix."""
-
-    async def create(self, request: ChatCompletionRequest) -> None:
-        raise RuntimeError("Failed to initialize provider client: connection refused")
+    async def create(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
+        raise BadRequestError("Invalid prompt")
 
 
-class FakeFailingChatServiceRuntimeOther:
-    """Service that raises RuntimeError without initialization prefix."""
+class FakeFailingChatServiceProvider(ChatService):
+    """Service that raises ProviderCallError."""
 
-    async def create(self, request: ChatCompletionRequest) -> None:
-        raise RuntimeError("Model not found")
+    async def create(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
+        raise ProviderCallError("Provider chat completion failed: connection refused")
 
 
-@pytest.mark.asyncio
-async def test_chat_endpoint_returns_400_on_value_error(monkeypatch: Any) -> None:
-    """Chat endpoint should return 400 for ValueError."""
-    monkeypatch.setattr(
-        chat, "ChatService", lambda: cast(ChatService, FakeFailingChatService())
+@pytest.fixture
+def chat_request() -> ChatCompletionRequest:
+    return ChatCompletionRequest(
+        messages=[ChatMessage(role="user", content="hello")],
     )
 
-    with pytest.raises(HTTPException) as exc_info:
-        await chat.create_chat_completion(
-            ChatCompletionRequest(
-                messages=[ChatMessage(role="user", content="hello")],
-            )
-        )
-
-    assert exc_info.value.status_code == 400
-    assert "Invalid prompt" in exc_info.value.detail
-
 
 @pytest.mark.asyncio
-async def test_chat_endpoint_returns_500_on_initialization_runtime_error(
-    monkeypatch: Any,
+async def test_chat_endpoint_returns_400_on_bad_request(
+    chat_request: ChatCompletionRequest,
 ) -> None:
-    """Chat endpoint should return 500 for RuntimeError with init message."""
-    monkeypatch.setattr(
-        chat,
-        "ChatService",
-        lambda: cast(ChatService, FakeFailingChatServiceRuntime()),
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        await chat.create_chat_completion(
-            ChatCompletionRequest(
-                messages=[ChatMessage(role="user", content="hello")],
-            )
+    """Chat endpoint should return 400 for BadRequestError."""
+    with pytest.raises(BadRequestError, match="Invalid prompt"):
+        await create_chat_completion(
+            chat_request,
+            service=cast(ChatService, FakeFailingChatServiceBadRequest()),
         )
-
-    assert exc_info.value.status_code == 500
-    assert "Failed to initialize provider client" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
-async def test_chat_endpoint_returns_502_on_other_runtime_error(
-    monkeypatch: Any,
+async def test_chat_endpoint_returns_502_on_provider_error(
+    chat_request: ChatCompletionRequest,
 ) -> None:
-    """Chat endpoint should return 502 for RuntimeError without init message."""
-    monkeypatch.setattr(
-        chat,
-        "ChatService",
-        lambda: cast(ChatService, FakeFailingChatServiceRuntimeOther()),
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        await chat.create_chat_completion(
-            ChatCompletionRequest(
-                messages=[ChatMessage(role="user", content="hello")],
-            )
+    """Chat endpoint should return 502 for ProviderCallError."""
+    with pytest.raises(ProviderCallError, match="Provider chat completion failed"):
+        await create_chat_completion(
+            chat_request,
+            service=cast(ChatService, FakeFailingChatServiceProvider()),
         )
-
-    assert exc_info.value.status_code == 502
-    assert "Model not found" in exc_info.value.detail

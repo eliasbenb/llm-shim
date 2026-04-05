@@ -14,6 +14,7 @@ from llm_shim.core.config import (
     get_data_dir,
     get_settings,
 )
+from llm_shim.core.exceptions import BadRequestError
 
 
 def test_get_data_dir_default() -> None:
@@ -94,7 +95,7 @@ def test_settings_resolve_provider_not_found() -> None:
         server=ServerSettings(),
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(BadRequestError):
         settings.resolve_chat_provider("openai:anthropic")
 
 
@@ -118,7 +119,7 @@ def test_settings_requires_provider_prefixed_model_when_missing() -> None:
         server=ServerSettings(),
     )
 
-    with pytest.raises(ValueError, match="provider:model"):
+    with pytest.raises(BadRequestError, match="provider:model"):
         settings.resolve_chat_provider(None)
 
 
@@ -128,7 +129,7 @@ def test_settings_requires_provider_prefixed_model_format() -> None:
         server=ServerSettings(),
     )
 
-    with pytest.raises(ValueError, match="provider:model"):
+    with pytest.raises(BadRequestError, match="provider:model"):
         settings.resolve_chat_provider("gpt-4o-mini")
 
 
@@ -138,7 +139,7 @@ def test_settings_requires_provider_to_be_configured() -> None:
         server=ServerSettings(),
     )
 
-    with pytest.raises(ValueError, match="provider 'bedrock'"):
+    with pytest.raises(BadRequestError, match="provider 'bedrock'"):
         settings.resolve_chat_provider("bedrock:gpt-4o-mini")
 
 

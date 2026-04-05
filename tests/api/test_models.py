@@ -1,19 +1,14 @@
 """Tests for models list API endpoint."""
 
-from typing import Any
-
 import pytest
 
-from llm_shim.api import models
-from llm_shim.api.schemas.openai import ModelListItem, ModelListResponse
+from llm_shim.api.models import list_models
 from llm_shim.core.config import ProviderSettings, ServerSettings, Settings
 from llm_shim.services.models import ModelsService
 
 
 @pytest.mark.asyncio
-async def test_models_endpoint_lists_chat_and_embedding_models(
-    monkeypatch: Any,
-) -> None:
+async def test_models_endpoint_lists_chat_and_embedding_models() -> None:
     settings = Settings.model_construct(
         providers={
             "openai": ProviderSettings(
@@ -28,27 +23,8 @@ async def test_models_endpoint_lists_chat_and_embedding_models(
         server=ServerSettings(),
     )
 
-    class FakeModelsService(ModelsService):
-        def list(self) -> ModelListResponse:
-            return ModelListResponse(
-                data=[
-                    ModelListItem(
-                        id=f"{provider_id}:{model}",
-                        created=123,
-                        owned_by=provider_id,
-                    )
-                    for provider_id, model in [
-                        *settings.list_chat_models(),
-                        *settings.list_embedding_models(),
-                    ]
-                ]
-            )
-
-    monkeypatch.setattr(
-        models, "get_models_service", lambda: FakeModelsService(settings=settings)
-    )
-
-    response = await models.list_models()
+    service = ModelsService(settings=settings)
+    response = await list_models(service=service)
 
     assert response.object == "list"
     assert len(response.data) == 5
