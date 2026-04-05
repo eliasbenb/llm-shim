@@ -2,6 +2,7 @@
 
 import logging
 from importlib.metadata import version
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -23,6 +24,14 @@ def create_app() -> FastAPI:
         FastAPI: Configured FastAPI application instance.
     """
     application = FastAPI(title="llm-shim", version=version("llm-shim"))
+
+    @application.middleware("http")
+    async def request_id_middleware(request: Request, call_next):
+        request_id = request.headers.get("x-request-id", uuid4().hex)
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["x-request-id"] = request_id
+        return response
 
     @application.exception_handler(ShimError)
     async def shim_error_handler(request: Request, exc: ShimError) -> JSONResponse:
